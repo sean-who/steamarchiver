@@ -1,0 +1,8 @@
+aiohttp[speedups]
+vdf @ git+https://github.com/solsticegamestudios/vdf.git@v4.0
+gevent-eventemitter~=2.1
+gevent>=1.3.0
+protobuf~=3.0
+wsproto~=1.2.0
+steam @ git+https://github.com/solsticegamestudios/steam#egg=steam
+dateutils
