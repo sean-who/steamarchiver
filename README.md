@@ -1,13 +1,10 @@
-# steamarchiver
+# Steam Archiver
 
 A set of utilities to preserve Steam content, including tools to archive app
 information, archive depots in SteamPipe CDN content and extract them, and
 download versions of the Steam client.
 
-Patches and feedback can go to [the mailing
-list](https://lists.sr.ht/~technomage6/steamarchiver).
-
-This is a Fork of [Steam Archive](https://git.sr.ht/~blowry/steamarchiver) by Blowry.
+This project is based on a [forked](https://git.sr.ht/~technomage6/steamarchiver) version of [Steam Archiver](https://git.sr.ht/~blowry/steamarchiver) by Benjamin Lowry.
 
 Special credit goes to [SolsticeGameStudio](https://github.com/solsticegamestudios/steam)
 for maintaining a current fork of the ValvePython library and keeping it current.
