@@ -60,8 +60,6 @@ def auto_login(client, username="", password="", fallback_anonymous=False, relog
                 json.dump(credentials, f, indent=4)
                     
         print("Logging in as", webauth.username)
-        while client.channel_secured == False:
-            client.sleep(0.5)
         client.login(webauth.username, access_token=webauth.refresh_token)
         
         # if the Refresh Token is about to expire
@@ -79,8 +77,6 @@ def auto_login(client, username="", password="", fallback_anonymous=False, relog
     if not username and exists(keypath) and relogin:
         with open(keypath, "r") as f: credentials = json.load(f)
         print("Logging in as", credentials['username'], "using saved login key")
-        while client.channel_secured == False:
-            client.sleep(0.5)
         client.login(credentials['username'], access_token=credentials['refresh_token'])
         return
     # if no username, fall back to either anonymous or CLI login based on fallback_anonymous
@@ -96,8 +92,6 @@ def auto_login(client, username="", password="", fallback_anonymous=False, relog
 		}
         with open(keypath, 'w') as f:
             json.dump(credentials, f, indent=4)
-        while client.channel_secured == False:
-            client.sleep(0.5)
         client.login(webauth.username, access_token=webauth.refresh_token)
         return
 
