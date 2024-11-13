@@ -146,3 +146,7 @@ if __name__ == "__main__":
                             else:
                                 f.write("%s\t\t%s" % (depot, key_hex) + "\n")
                                 print("%s\t\t%s" % (depot, key_hex))
+
+    @steam_client.on("disconnected")
+    def handle_disconnect():
+        steam_client.reconnect(delay=3,maxdelay=30)

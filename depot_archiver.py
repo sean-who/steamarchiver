@@ -45,10 +45,10 @@ if __name__ == "__main__": # exit before we import our shit if the args are wron
         print("The Workshop doesn't have branches. Unable to continue")
         parser.print_help()
         exit(1)
-    if args.branch and not args.bpassword:
-        print("You need a password in order to download from a non-Public Branch")
-        parser.print_help()
-        exit(1)
+    # if args.branch and not args.bpassword:
+    #     print("You need a password in order to download from a non-Public Branch")
+    #     parser.print_help()
+    #     exit(1)
 
 from steam.client import SteamClient
 from steam.client.cdn import CDNClient, CDNDepotManifest
@@ -424,8 +424,8 @@ if __name__ == "__main__":
             get_depotkeys(appid, depotid)
             if manifestid:
                 print("Archiving", appinfo['common']['name'], "depot", depotid, "manifest", manifestid)
-                exit_status += (0 if archive_manifest(try_load_manifest(appid, depotid, manifestid), c, name, args.dry_run, args.server, args.backup) else 1)
-            elif args.branch:
+                exit_status += (0 if archive_manifest(try_load_manifest(appid, depotid, manifestid, args.branch), c, name, args.dry_run, args.server, args.backup) else 1)
+            elif args.branch and args.bpassword:
                 try:
                     branch_key = beta_check_password(appid, args.bpassword, c)
                     if args.encryptedbranch != '':
@@ -442,7 +442,7 @@ if __name__ == "__main__":
             else:
                 manifest = get_gid(appinfo['depots'][str(depotid)]['manifests']['public'])
                 print("Archiving", appinfo['common']['name'], "depot", depotid, "manifest", manifest)
-                exit_status += (0 if archive_manifest(try_load_manifest(appid, depotid, manifest), c, name, args.dry_run, args.server, args.backup) else 1)
+                exit_status += (0 if archive_manifest(try_load_manifest(appid, depotid, manifest, args.branch), c, name, args.dry_run, args.server, args.backup) else 1)
         else:
             print("Archiving all latest depots for", appinfo['common']['name'], "build", appinfo['depots']['branches']['public']['buildid'])
             for depot in appinfo["depots"]:
