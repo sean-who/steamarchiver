@@ -6,13 +6,12 @@ from datetime import datetime
 from math import ceil
 from os import makedirs, path, listdir, remove
 from sys import argv
-
-# import logging
-# logging.basicConfig(level=logging.DEBUG)
+import logging
 
 if __name__ == "__main__": # exit before we import our shit if the args are wrong
     parser = ArgumentParser(description='Download Steam content depots for archival. Downloading apps: Specify an app to download all the depots for that app, or an app and depot ID to download the latest version of that depot (or a specific version if the manifest ID is specified.) Downloading workshop items: Use the -w flag to specify the ID of the workshop file to download. Exit code is 0 if all downloads succeeded, or the number of failures if at least one failed.')
     dl_group = parser.add_mutually_exclusive_group()
+    log_group = parser.add_mutually_exclusive_group()
     dl_group.add_argument("-a", type=int, dest="downloads", metavar=("appid","depotid"), action="append", nargs='+', help="App, depot, and manifest ID to download. If the manifest ID is omitted, the lastest manifest specified by the public branch will be downloaded.\nIf the depot ID is omitted, all depots specified by the public branch will be downloaded.")
     dl_group.add_argument("-w", type=int, nargs='?', help="Workshop file ID to download.", dest="workshop_id")
     parser.add_argument("--anon", "--anonymous", action="store_true", help="Logs in Anonymously. Only used for public accessible files.")
@@ -28,6 +27,8 @@ if __name__ == "__main__": # exit before we import our shit if the args are wron
     parser.add_argument("-i", help="Log into a Steam account interactively.", dest="interactive", action="store_true")
     parser.add_argument("-u", type=str, help="Username for non-interactive login", dest="username", nargs="?")
     parser.add_argument("-p", type=str, help="Password for non-interactive login", dest="password", nargs="?")
+    log_group.add_argument("--debug", help="Enable debug logging", action="store_true")
+    log_group.add_argument("--info", help="Enable info logging", action="store_true")
     args = parser.parse_args()
     if args.connection_limit < 1:
         print("connection limit must be at least 1")
@@ -45,6 +46,10 @@ if __name__ == "__main__": # exit before we import our shit if the args are wron
         print("The Workshop doesn't have branches. Unable to continue")
         parser.print_help()
         exit(1)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.info:
+        logging.basicConfig(level=logging.INFO)
     # if args.branch and not args.bpassword:
     #     print("You need a password in order to download from a non-Public Branch")
     #     parser.print_help()

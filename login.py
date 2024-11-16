@@ -7,11 +7,13 @@ from os import makedirs
 from os.path import exists
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import logging
 
 def auto_login(client, username="", password="", fallback_anonymous=False, relogin=True):
     assert(type(client) == SteamClient)
     makedirs("./auth", exist_ok=True)
     
+    _LOG = logging.getLogger("Login")
     webauth = wa.WebAuth()
     
     keypath = "./auth/credentials.json"
@@ -43,6 +45,7 @@ def auto_login(client, username="", password="", fallback_anonymous=False, relog
             
             # If the username does not match the one on file, we need to make a new one
             if credentials['username'] != webauth.username:
+                _LOG.info("New Username detected, updating credentials file")
                 credentials = {
 					'expires': (datetime.now() + relativedelta(months=6, days=-1)).strftime("%Y-%m-%d %H:%M:%S.%f"),
     				'username': webauth.username,
@@ -51,6 +54,7 @@ def auto_login(client, username="", password="", fallback_anonymous=False, relog
                 with open(keypath, 'w') as f:
                     json.dump(credentials, f, indent=4)
         else:
+            _LOG.info("No credentials file detected, creating one")
             credentials = {
                 'expires': (datetime.now() + relativedelta(months=6, days=-1)).strftime("%Y-%m-%d %H:%M:%S.%f"),
 				'username': webauth.username,
@@ -75,6 +79,7 @@ def auto_login(client, username="", password="", fallback_anonymous=False, relog
         
         return
     if not username and exists(keypath) and relogin:
+        _LOG.info("No username specified, attempting to login using saved login key")
         with open(keypath, "r") as f: credentials = json.load(f)
         print("Logging in as", credentials['username'], "using saved login key")
         client.login(credentials['username'], access_token=credentials['refresh_token'])
