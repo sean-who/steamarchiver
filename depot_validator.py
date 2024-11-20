@@ -17,13 +17,15 @@ from struct import unpack
 from sys import argv
 from zipfile import BadZipFile, ZipFile
 import lzma
+import csv
 
 if __name__ == "__main__": # exit before we import our shit if the args are wrong
     parser = ArgumentParser(description='Verifies downloaded depots.')
     parser.add_argument('depotid', type=int)
     parser.add_argument('depotkey', type=str, nargs='?')
     parser.add_argument('-b', dest="backup", help="Path to a .csd backup file to review (the manifest must also be present in the depots folder)", nargs='?')
-    # parser.add_argument('-f', dest="files", help="List files to review (can be used multiple times); if ommitted, all files will be examined. Glob matching supported.", action="append")
+    parser.add_argument('-f', dest="files", help="List of files to review (space-separated)", nargs='+')
+    parser.add_argument('-F', dest="file_list", help="Path to a text or CSV file containing the list of files to review", nargs='?')
     # parser.add_argument('-m', dest="manifests", help="Uses the existing manifests to validate the files")
     parser.add_argument('-t', type=int, default=1, dest="threads", help="specifies the number of threads to use for processing the files")
     args = parser.parse_args()
@@ -31,12 +33,28 @@ if __name__ == "__main__": # exit before we import our shit if the args are wron
         print("At this time, backup and manifest filtering can not be used together.")
         parser.print_help()
         exit(1)
+        
+    file_list = []
+    if args.file_list:
+        with open(args.file_list, 'r') as f:
+            if args.file_list.endswith('.csv'):
+                reader = csv.reader(f)
+                for row in reader:
+                    file_list.extend(row)
+            else:
+                file_list.extend(f.read().splitlines())
+
+    if args.files:
+        file_list.extend(args.files)
 
 from steam.core.manifest import DepotManifest
 from steam.core.crypto import symmetric_decrypt
 from chunkstore import Chunkstore
 
 def process_file(file, value, badfiles):
+    if args.files and file not in args.files:
+        return None, True  # Skip files not in the list
+    
     try:
         if args.backup:
             chunkhex = hexlify(file).decode()
