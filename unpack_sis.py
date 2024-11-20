@@ -87,15 +87,19 @@ def unpack_sis(sku, chunkstore_path, use_key = False):
 
 if __name__ == "__main__":
     parser = ArgumentParser(description='Unpacks game data chunks from a SteamPipe retail master or game backup.')
-    parser.add_argument("target", type=str, help="Path to the sku.sis file defining the master to unpack (or path to csd or csm file if only unpacking one chunkstore.)")
+    parser.add_argument("target", type=str, nargs='+', help="Path to the sku.sis file defining the master to unpack, or paths to csd or csm files if unpacking multiple chunkstores.")
     parser.add_argument("-e", action='store_true', help="Re-encrypt the chunks with a key from depot_keys.txt (if one is available) after extracting. (The primary reason you would want to do this is to serve the chunks to a Steam client over a LAN cache.)", dest="key")
     args = parser.parse_args()
-    if args.target.endswith(".sis"):
-        with open(args.target, "r") as f:
+    
+    if len(args.target) == 1 and args.target[0].endswith(".sis"):
+        with open(args.target[0], "r") as f:
             sku = loads(f.read())
-        chunkstore_path = path.dirname(args.target)
+        chunkstore_path = path.dirname(args.target[0])
         if chunkstore_path == "":
             chunkstore_path = "."
         exit(0 if unpack_sis(sku, chunkstore_path, args.key) else 1)
     else:
-        unpack_chunkstore(args.target.replace(".csm","").replace(".csd",""), args.key)
+        for target in args.target:
+            target_base = sub(r'_[^_]+$', '_', target)
+            unpack_chunkstore(target_base, args.key)
+            ##unpack_chunkstore(target.replace(".csm","").replace(".csd",""), args.key)

@@ -8,7 +8,7 @@ from vdf import dumps
 from sys import stderr
 from chunkstore import Chunkstore
 
-def pack_backup(depot, destdir, decrypted=False, no_update=False):
+def pack_backup(depot, destdir, decrypted=False, no_update=False, split=False):
     target_base = destdir + "/" + str(depot) + "_depotcache_"
     depot_dir = "./depots/" + str(depot)
     max_file_size = 1 * 1024 * 1024 * 1024  # 1 GiB
@@ -28,9 +28,9 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False):
             mode = "ab"
             # Scan all existing .csm files
             while exists(csm_target):
-                chunkstore.read_csm(csm_target)
                 file_index += 1
                 csm_target = target_base + str(file_index) + ".csm"
+                csd_target = target_base + str(file_index) + ".csd"
             # Reset file_index to the last valid index
             file_index -= 1
             csd_target = target_base + str(file_index) + ".csd"
@@ -58,6 +58,7 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False):
 
     csd = open(csd_target, mode)
     chunks_added = 0
+    sizes = []
     for chunk in chunks:
         csd.seek(0, 2)
         offset = csd.tell()
@@ -67,9 +68,10 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False):
             length = chunkfile.tell()
             chunkfile.seek(0)
 
-            if offset + length > max_file_size:
+            if split and offset + length > max_file_size:
+                sizes.append(csd.tell())
                 csd.close()
-                chunkstore.write_csm(csm_target)
+                chunkstore.write_csm()
                 file_index += 1
                 csd_target = target_base + str(file_index) + ".csd"
                 csm_target = target_base + str(file_index) + ".csm"
@@ -85,11 +87,12 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False):
             chunkstore.chunks[unhexlify(chunk)] = (offset, length)
         chunks_added += 1
         print(f"depot {depot}: added chunk {chunk} ({chunks_added}/{len(chunks)})")
+    sizes.append(csd.tell())
     csd.close()
-    chunkstore.write_csm(csm_target)
+    chunkstore.write_csm()
     print("writing index...")
     print("packed", len(chunks), "chunk" if len(chunks) == 1 else "chunks")
-    return csd.tell()
+    return sizes
 
 if __name__ == "__main__":
     parser = ArgumentParser(description='Pack a SteamPipe backup (.csd/.csm files, and optionally an sku.sis file defining the backup) from individual chunks in the depots/ folder.')
@@ -98,6 +101,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", dest="name", default="steamarchiver backup", type=str, help="Backup name")
     parser.add_argument("--decrypted", action='store_true', help="Use decrypted chunks to pack backup", dest="decrypted")
     parser.add_argument("--no-update", action='store_true', help="If an existing backup is found, DELETE it instead of updating it", dest="no_update")
+    parser.add_argument("--split", action='store_true', help="Enable 1 GiB file splitting", dest="split")
     parser.add_argument("--destdir", help="Directory to put sis/csm/csd files in", default=".")
     args = parser.parse_args()
     makedirs(args.destdir, exist_ok=True)
@@ -136,10 +140,11 @@ if __name__ == "__main__":
             else:
                 sku["sku"]["depots"][len(sku["sku"]["depots"])] = str(depot)
                 sku["sku"]["manifests"][str(depot)] = str(manifest)
-        size = pack_backup(depot, args.destdir, args.decrypted, args.no_update)
+        sizes = pack_backup(depot, args.destdir, args.decrypted, args.no_update, args.split)
         if write_sku:
-            sku["sku"]["chunkstores"][str(depot)] = {"1":str(size)}
+            sku["sku"]["chunkstores"][str(depot)] = {str(i+1): str(size) for i, size in enumerate(sizes)}
+
     if write_sku:
         with open(args.destdir + "/sku.sis", "w") as skufile:
-            skufile.write(dumps(sku))
+            skufile.write(dumps(sku, pretty=True))
             print("wrote sku.sis")
