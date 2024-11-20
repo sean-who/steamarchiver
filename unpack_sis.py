@@ -10,34 +10,44 @@ from sys import argv
 from vdf import loads
 from chunkstore import Chunkstore
 
-def unpack_chunkstore(target, key=None, key_hex=None):
-        chunkstore = Chunkstore(target)
+def unpack_chunkstore(target_base, key=None, key_hex=None):
+    file_index = 1
+    csd_target = target_base + str(file_index) + ".csd"
+    csm_target = target_base + str(file_index) + ".csm"
+    
+    while path.exists(csd_target) and path.exists(csm_target):
+        chunkstore = Chunkstore(csd_target)  # Initialize with the current .csd file
         if key == True:
             key, key_hex = find_key(chunkstore.depot)
-        with open(chunkstore.csdname, "rb") as csdfile:
+
+        with open(csd_target, "rb") as csdfile:
             def unpacker(chunkstore, sha, offset, length):
-                # print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, target + ".csd"))
+                # print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, csd_target))
                 csdfile.seek(offset)
                 if key:
                     if not path.exists("./depots/%s/%s" % (chunkstore.depot, hexlify(sha).decode())):
-                        print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, target + ".csd"))
+                        print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, csd_target))
                         with open("./depots/%s/%s" % (chunkstore.depot, hexlify(sha).decode()), "wb") as f:
                             print("writing %s bytes re-encrypted using key %s and random IV" % (length, key_hex))
                             f.write(symmetric_encrypt(csdfile.read(length), key))
                 elif chunkstore.is_encrypted:
                     if not path.exists("./depots/%s/%s" % (chunkstore.depot, hexlify(sha).decode())):
-                        print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, target + ".csd"))
+                        print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, csd_target))
                         with open("./depots/%s/%s" % (chunkstore.depot, hexlify(sha).decode()), "wb") as f:
                             print("writing %s bytes encrypted" % length)
                             f.write(csdfile.read(length))
                 else:
                     if not path.exists("./depots/%s/%s_decrypted" % (chunkstore.depot, hexlify(sha).decode())):
-                        print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, target + ".csd"))
+                        print("extracting chunk %s from offset %s in file %s" % (hexlify(sha).decode(), offset, csd_target))
                         with open("./depots/%s/%s_decrypted" % (chunkstore.depot, hexlify(sha).decode()), "wb") as f:
                             print("writing %s bytes unencrypted" % length)
                             f.write(csdfile.read(length))
             makedirs("./depots/%s" % chunkstore.depot, exist_ok=True)
             chunkstore.unpack(unpacker)
+        
+        file_index += 1
+        csd_target = target_base + str(file_index) + ".csd"
+        csm_target = target_base + str(file_index) + ".csm"
 
 def find_key(depot):
     if path.exists(f"./keys/{depot}.depotkey"):
@@ -68,25 +78,8 @@ def unpack_sis(sku, chunkstore_path, use_key = False):
         need_manifests[depot] = sku["manifests"][depot]
         for chunkstore in sku["chunkstores"][depot]:
             print("unpacking chunkstore %s" % chunkstore)
-            target = chunkstore_path + "/%s_depotcache_%s" % (depot, chunkstore)
-            if not path.exists(target + ".csm"):
-                # maybe it's in a disk folder?
-                target = chunkstore_path + "/Disk_%s/%s_depotcache_%s" % (chunkstore, depot, chunkstore)
-                if not path.exists(target + ".csm"):
-                    # try again with other disk folders?
-                    disk = 1
-                    while disk <= int(sku["disks"]):
-                        target = chunkstore_path + "/Disk_%s/%s_depotcache_%s" % (disk, depot, chunkstore)
-                        print("searching for depot %s in disk %s" % (depot, disk))
-                        if path.exists(target + ".csm"):
-                            break
-                        disk += 1
-                    if not path.exists(target + ".csm"):
-                        # welp
-                        print("couldn't find depot %s chunkstore %s" % (depot, chunkstore))
-                        return False
-            # unpack this chunkstore
-            unpack_chunkstore(target, key, key_hex)
+            target_base = chunkstore_path + "/%s_depotcache_" % depot
+            unpack_chunkstore(target_base, key, key_hex)
     print("done unpacking, to extract with depot_extractor you will need these manifests:")
     for depot, manifest in need_manifests.items():
         print("depot %s manifest %s" % (depot, manifest))

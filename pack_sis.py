@@ -9,9 +9,12 @@ from sys import stderr
 from chunkstore import Chunkstore
 
 def pack_backup(depot, destdir, decrypted=False, no_update=False):
-    csd_target = destdir + "/" + str(depot) + "_depotcache_1.csd"
-    csm_target = destdir + "/" + str(depot) + "_depotcache_1.csm"
+    target_base = destdir + "/" + str(depot) + "_depotcache_"
     depot_dir = "./depots/" + str(depot)
+    max_file_size = 1 * 1024 * 1024 * 1024  # 1 GiB
+    file_index = 1
+    csd_target = target_base + str(file_index) + ".csd"
+    csm_target = target_base + str(file_index) + ".csm"
     mode = "wb"
 
     if exists(csm_target) and exists(csd_target):
@@ -23,9 +26,17 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False):
             chunkstore = Chunkstore(csd_target, depot, not decrypted)
             chunkstore.unpack()
             mode = "ab"
+            # Scan all existing .csm files
+            while exists(csm_target):
+                chunkstore.read_csm(csm_target)
+                file_index += 1
+                csm_target = target_base + str(file_index) + ".csm"
+            # Reset file_index to the last valid index
+            file_index -= 1
+            csd_target = target_base + str(file_index) + ".csd"
+            csm_target = target_base + str(file_index) + ".csm"
     else:
         chunkstore = Chunkstore(csd_target, depot, not decrypted)
-
 
     if decrypted:
         chunk_match = lambda chunk: chunk.endswith("_decrypted")
@@ -44,34 +55,41 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False):
             and chunk_match(chunk.name)
             and is_hex(chunk.name.replace("_decrypted",""))
             and not unhexlify(chunk.name.replace("_decrypted","")) in chunkstore.chunks.keys()]
-    with open(csd_target, mode) as csd:
-        # iterate over chunks
-        chunks_added = 0
-        for chunk in chunks:
-            csd.seek(0, 2)
-            offset = csd.tell()
 
-            with open("./depots/" + str(depot) + "/" + chunk, "rb") as chunkfile:
-                # get length of chunk
-                chunkfile.seek(0, 2)
-                length = chunkfile.tell()
-                chunkfile.seek(0)
-
-                # write chunk content to csd
-                csd.write(chunkfile.read())
-
-            # write chunk location to csm
-            if decrypted:
-                chunkstore.chunks[unhexlify(chunk.replace("_decrypted",""))] = (offset, length)
-            else:
-                chunkstore.chunks[unhexlify(chunk)] = (offset, length)
-            chunks_added += 1
-            print(f"depot {depot}: added chunk {chunk} ({chunks_added}/{len(chunks)})")
-        print("writing index...")
-        chunkstore.write_csm()
-        print("packed", len(chunks), "chunk" if len(chunks) == 1 else "chunks")
+    csd = open(csd_target, mode)
+    chunks_added = 0
+    for chunk in chunks:
         csd.seek(0, 2)
-        return csd.tell()
+        offset = csd.tell()
+
+        with open("./depots/" + str(depot) + "/" + chunk, "rb") as chunkfile:
+            chunkfile.seek(0, 2)
+            length = chunkfile.tell()
+            chunkfile.seek(0)
+
+            if offset + length > max_file_size:
+                csd.close()
+                chunkstore.write_csm(csm_target)
+                file_index += 1
+                csd_target = target_base + str(file_index) + ".csd"
+                csm_target = target_base + str(file_index) + ".csm"
+                csd = open(csd_target, "wb")
+                chunkstore = Chunkstore(csd_target, depot, not decrypted)
+                offset = 0
+
+            csd.write(chunkfile.read())
+
+        if decrypted:
+            chunkstore.chunks[unhexlify(chunk.replace("_decrypted",""))] = (offset, length)
+        else:
+            chunkstore.chunks[unhexlify(chunk)] = (offset, length)
+        chunks_added += 1
+        print(f"depot {depot}: added chunk {chunk} ({chunks_added}/{len(chunks)})")
+    csd.close()
+    chunkstore.write_csm(csm_target)
+    print("writing index...")
+    print("packed", len(chunks), "chunk" if len(chunks) == 1 else "chunks")
+    return csd.tell()
 
 if __name__ == "__main__":
     parser = ArgumentParser(description='Pack a SteamPipe backup (.csd/.csm files, and optionally an sku.sis file defining the backup) from individual chunks in the depots/ folder.')
