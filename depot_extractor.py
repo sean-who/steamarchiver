@@ -33,6 +33,7 @@ if __name__ == "__main__":
     path = "./depots/%s/" % args.depotid
     keyfile = "./keys/%s.depotkey" % args.depotid
     manifest = None
+    badfiles = []
     with open(path + "%s.zip" % args.manifestid, "rb") as f:
         manifest = DepotManifest(f.read())
     if args.depotkey:
@@ -115,6 +116,7 @@ if __name__ == "__main__":
                         is_encrypted = chunkstore.is_encrypted
                     except:
                         print("missing chunk " + hexlify(chunk.sha).decode())
+                        badfiles.append(hex(chunk.sha).decode())
                         breakpoint()
                         continue
                     if is_encrypted:
@@ -140,6 +142,7 @@ if __name__ == "__main__":
                             decrypted = chunkfile.read()
                     else:
                         print("missing chunk " + chunkhex)
+                        badfiles.append(chunkhex)
                         continue
                 decompressed = None
                 if decrypted[:2] == b'VZ': # LZMA
@@ -157,13 +160,21 @@ if __name__ == "__main__":
                     decompressed = zipfile.read(zipfile.filelist[0])
                 else:
                     print("ERROR: unknown archive type", decrypted[:2].decode())
-                    exit(1)
+                    badfiles.append(chunkhex)
+                    #exit(1)
                 sha = sha1(decompressed)
                 if sha.digest() != chunk.sha:
                     print("ERROR: sha1 checksum mismatch (expected %s, got %s)" % (hexlify(chunk.sha).decode(), sha.hexdigest()))
+                    badfiles.append(hexlify(chunk.sha).decode())
                 if not args.dry_run:
                     with open(args.dest + "/" + file.filename, "ab") as f:
                         f.seek(chunk.offset)
                         f.write(decompressed)
         except IsADirectoryError:
             pass
+
+    if badfiles:
+        print("ERROR: the following files are missing or corrupt:")
+        for file in badfiles:
+            print(file)
+        exit(1)

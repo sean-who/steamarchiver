@@ -8,6 +8,8 @@ from os import makedirs, path, listdir, remove
 from sys import argv
 import logging
 
+_LOG = logging.getLogger("DepotArchiver")
+
 if __name__ == "__main__": # exit before we import our shit if the args are wrong
     parser = ArgumentParser(description='Download Steam content depots for archival. Downloading apps: Specify an app to download all the depots for that app, or an app and depot ID to download the latest version of that depot (or a specific version if the manifest ID is specified.) Downloading workshop items: Use the -w flag to specify the ID of the workshop file to download. Exit code is 0 if all downloads succeeded, or the number of failures if at least one failed.')
     dl_group = parser.add_mutually_exclusive_group()
