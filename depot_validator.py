@@ -26,7 +26,7 @@ if __name__ == "__main__": # exit before we import our shit if the args are wron
     parser.add_argument('-b', dest="backup", help="Path to a .csd backup file to review (the manifest must also be present in the depots folder)", nargs='?')
     parser.add_argument('-f', dest="files", help="List of files to review (space-separated)", nargs='+')
     parser.add_argument('-F', dest="file_list", help="Path to a text or CSV file containing the list of files to review", nargs='?')
-    # parser.add_argument('-m', dest="manifests", help="Uses the existing manifests to validate the files")
+    # parser.add_argument('-m', dest="manifests", help="Path to the manifest file to validate the files", nargs='?')
     parser.add_argument('-t', type=int, default=1, dest="threads", help="specifies the number of threads to use for processing the files")
     args = parser.parse_args()
     if args.backup and args.manifests:
@@ -176,31 +176,28 @@ if __name__ == "__main__":
                 chunks_by_store[chunk] = csm
             chunkstores[csm] = chunkstore
     # elif args.manifests:
-    #     manifestChunks = []
-    #     manifestFiles = [data.name for data in scandir(path) if data.is_file()
-    #     and data.name.endswith(".zip")]
+    #     manifestChunks = set()
+    #     manifestFiles = []
+    #     if len(args.manifests) == 1 and Path(args.manifests[0]).is_dir():
+    #         manifestFiles = [Path(args.manifests[0]) / data.name for data in scandir(args.manifests[0]) if data.is_file() and data.name.endswith(".zip")]
+    #     else:
+    #         manifestFiles = args.manifests
+
     #     for eachManifest in manifestFiles:
-    #         with open(path + "%s.zip" % eachManifest, "rb") as f:
-    #             manifest = DepotManifest(f.read())
+    #         with open(eachManifest, "rb") as f:
+    #             manifest_data = f.read()
+    #             manifest = DepotManifest.deserialize(manifest_data)
     #             if manifest.filenames_encrypted:
     #                 manifest.decrypt_filenames(args.depotkey)
     #             for files in manifest.iter_files():
-    #                 for chunk in sorted(files.chunks, key = lambda chunk: chunk.offset):
-    #                     manifestChunks.append(chunk.sha)
-    #     for name in manifestChunks: chunks[name] = 0
+    #                 for chunk in sorted(files.chunks, key=lambda chunk: chunk.offset):
+    #                     manifestChunks.add(chunk.sha)
+    #     for name in manifestChunks:
+    #         chunks[name] = 0
     else:
         chunkFiles = [data.name for data in scandir(path) if data.is_file()
         and not data.name.endswith(".zip")]
         for name in chunkFiles: chunks[name] = 0
-        
-    #    if len(chunks) > len(unique_files):
-    #         print("There are more chunks than needed.")
-    #         print(f"{len(chunk)} Chunks in directory.")
-    #         print(f"{len(unique_files)} in manifests.")
-    #    if len(chunks) < len(unique_files):
-    #         print("There are missing chunks.")
-    #         print(f"{len(chunk)} Chunks in directory.")
-    #         print(f"{len(unique_files)} in manifests.")
 
     def is_hex(s):
         try:
@@ -216,78 +213,6 @@ if __name__ == "__main__":
         for future in as_completed(future_to_file):
             future.result()
  
-    # for file, value in chunks.items():
-        # try:
-        #         if args.backup:
-        #             chunkhex = hexlify(file).decode()
-        #             chunk_data = None
-        #             is_encrypted = False
-        #             try:
-        #                 chunkstore = chunkstores[chunks_by_store[file]]
-        #                 chunk_data = chunkstore.get_chunk(file)
-        #                 is_encrypted = chunkstore.is_encrypted
-        #             except Exception as e:
-        #                 print(f"\033[31mError retrieving chunk\033[0m {chunkhex}: {e}")
-        #                 ##breakpoint()
-        #                 continue
-        #             if is_encrypted:
-        #                 if args.depotkey:
-        #                     decrypted = symmetric_decrypt(chunk_data, args.depotkey)
-        #                 else:
-        #                     print("\033[31mERROR: chunk %s is encrypted, but no depot key was specified\033[0m" % chunkhex)
-        #                     exit(1)
-        #             else:
-        #                 decrypted = chunk_data
-        #                 chunk_data = None
-
-        #         else:
-        #             chunkhex = hexlify(unhexlify(file.replace("_decrypted", ""))).decode()
-        #             if exists(path + chunkhex):
-        #                 with open(path + chunkhex, "rb") as chunkfile:
-        #                     if args.depotkey:
-        #                         try:
-        #                             decrypted = symmetric_decrypt(chunkfile.read(), args.depotkey)
-        #                         except ValueError as e:
-        #                             print(f"{e}")
-        #                             print(f"\033[31mError, unable to decrypt file:\033[0m {chunkhex}")
-        #                             badfiles.append(chunkhex)
-        #                             continue
-        #                     else:
-        #                         print("\033[31mERROR: chunk %s is encrypted, but no depot key was specified\033[0m" % chunkhex)
-        #                         exit(1)
-        #             elif exists(path + chunkhex + "_decrypted"):
-        #                 with open(path + chunkhex + "_decrypted", "rb") as chunkfile:
-        #                     decrypted = chunkfile.read()
-        #             else:
-        #                 print("missing chunk " + chunkhex)
-        #                 continue
-        #         decompressed = None
-        #         if decrypted[:2] == b'VZ': # LZMA
-        #             decompressedSize = unpack('<i', decrypted[-6:-2])[0]
-        #             print("Testing (LZMA) from chunk", chunkhex, "Size:", decompressedSize)
-        #             try:
-        #                 decompressed = lzma.LZMADecompressor(lzma.FORMAT_RAW, filters=[lzma._decode_filter_properties(lzma.FILTER_LZMA1, decrypted[7:12])]).decompress(decrypted[12:-10])[:decompressedSize]
-        #             except lzma.LZMAError as e:
-        #                 print(f"\033[31mFailed to decompress:\033[0m {chunkhex}")
-        #                 print(f"\033[31mError:\033[0m {e}")
-        #                 badfiles.append(chunkhex)
-        #                 continue
-        #         elif decrypted[:2] == b'PK': # Zip
-        #             print("Testing (Zip) from chunk", chunkhex)
-        #             zipfile = ZipFile(BytesIO(decrypted))
-        #             decompressed = zipfile.read(zipfile.filelist[0])
-        #         else:
-        #             print("\033[31mERROR: unknown archive type\033[0m", decrypted[:2].decode())
-        #             badfiles.append(chunkhex)
-        #             continue
-        #             #exit(1)
-        #         sha = sha1(decompressed)
-        #         if sha.digest() != unhexlify(chunkhex):
-        #             print("\033[31mERROR: sha1 checksum mismatch\033[0m (expected %s, got %s)" % (chunkhex, sha.hexdigest()))
-        #             badfiles.append(chunkhex)
-        # except IsADirectoryError:
-        #     pass
-    # for bad in badfiles:
     if not badfiles.empty():
         print("Bad File:")
     while not badfiles.empty():

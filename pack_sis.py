@@ -7,8 +7,9 @@ from struct import pack, unpack, iter_unpack
 from vdf import dumps
 from sys import stderr
 from chunkstore import Chunkstore
+from steam.core.manifest import DepotManifest
 
-def pack_backup(depot, destdir, decrypted=False, no_update=False, split=False):
+def pack_backup(depot, destdir, decrypted=False, no_update=False, split=False, manifest_chunks=None, only_manifest=False):
     target_base = destdir + "/" + str(depot) + "_depotcache_"
     depot_dir = "./depots/" + str(depot)
     max_file_size = 1 * 1024 * 1024 * 1024  # 1 GiB
@@ -17,6 +18,7 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False, split=False):
     csm_target = target_base + str(file_index) + ".csm"
     mode = "wb"
 
+    chunkstore = None
     if exists(csm_target) and exists(csd_target):
         if no_update: # don't want to update the old files, delete them
             remove(csd_target)
@@ -35,7 +37,7 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False, split=False):
             file_index -= 1
             csd_target = target_base + str(file_index) + ".csd"
             csm_target = target_base + str(file_index) + ".csm"
-    else:
+    if chunkstore is None:
         chunkstore = Chunkstore(csd_target, depot, not decrypted)
 
     if decrypted:
@@ -50,11 +52,19 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False, split=False):
         except:
             return False
 
-    chunks = [chunk.name for chunk in scandir(depot_dir) if chunk.is_file()
-            and not chunk.name.endswith(".zip")
-            and chunk_match(chunk.name)
-            and is_hex(chunk.name.replace("_decrypted",""))
-            and not unhexlify(chunk.name.replace("_decrypted","")) in chunkstore.chunks.keys()]
+    chunks = set()
+    if manifest_chunks:
+        chunks.update(manifest_chunks)
+
+    if not only_manifest:
+        cdn_chunks = [chunk.name for chunk in scandir(depot_dir) if chunk.is_file()
+                      and not chunk.name.endswith(".zip")
+                      and chunk_match(chunk.name)
+                      and is_hex(chunk.name.replace("_decrypted", ""))
+                      and not unhexlify(chunk.name.replace("_decrypted", "")) in chunkstore.chunks.keys()]
+        chunks.update(cdn_chunks)
+    
+    chunks = sorted(chunks)
 
     csd = open(csd_target, mode)
     chunks_added = 0
@@ -82,7 +92,7 @@ def pack_backup(depot, destdir, decrypted=False, no_update=False, split=False):
             csd.write(chunkfile.read())
 
         if decrypted:
-            chunkstore.chunks[unhexlify(chunk.replace("_decrypted",""))] = (offset, length)
+            chunkstore.chunks[unhexlify(chunk.replace("_decrypted", ""))] = (offset, length)
         else:
             chunkstore.chunks[unhexlify(chunk)] = (offset, length)
         chunks_added += 1
@@ -102,6 +112,7 @@ if __name__ == "__main__":
     parser.add_argument("--decrypted", action='store_true', help="Use decrypted chunks to pack backup", dest="decrypted")
     parser.add_argument("--no-update", action='store_true', help="If an existing backup is found, DELETE it instead of updating it", dest="no_update")
     parser.add_argument("--split", action='store_true', help="Enable 1 GiB file splitting", dest="split")
+    parser.add_argument("--only-manifest", action='store_true', help="Only grab files listed in the manifest", dest="only_manifest")
     parser.add_argument("--destdir", help="Directory to put sis/csm/csd files in", default=".")
     args = parser.parse_args()
     makedirs(args.destdir, exist_ok=True)
@@ -130,17 +141,27 @@ if __name__ == "__main__":
     for depot_tuple in args.depots:
         if len(depot_tuple) == 2:
             depot, manifest = depot_tuple
+            manifest_chunks = set()
+            if (args.only_manifest):
+                with open(manifest, "rb") as f:
+                    manifest_data_source = f.read()
+                    manifest_data = DepotManifest.deserialize(manifest_data_source)
+                    if manifest_data.filenames_encrypted:
+                        manifest_data.decrypt_filenames(args.depotkey)
+                    for files in manifest_data.iter_files():
+                        for chunk in sorted(files.chunks, key=lambda chunk: chunk.offset):
+                            manifest_chunks.add(hexlify(chunk.sha).decode())
         else:
             depot = depot_tuple[0]
-            manifest = False
+            manifest_chunks = None
         if write_sku:
-            if not manifest:
+            if manifest_chunks is None:
                 write_sku = False
-                print("not generating sku.sis: no manifest specified for depot",depot)
+                print("not generating sku.sis: no manifest specified for depot", depot)
             else:
                 sku["sku"]["depots"][len(sku["sku"]["depots"])] = str(depot)
                 sku["sku"]["manifests"][str(depot)] = str(manifest)
-        sizes = pack_backup(depot, args.destdir, args.decrypted, args.no_update, args.split)
+        sizes = pack_backup(depot, args.destdir, args.decrypted, args.no_update, args.split, manifest_chunks, args.only_manifest)
         if write_sku:
             sku["sku"]["chunkstores"][str(depot)] = {str(i+1): str(size) for i, size in enumerate(sizes)}
 
