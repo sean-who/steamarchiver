@@ -36,6 +36,8 @@ def download_packages(client_manifest, platform, download_zip=True, download_vz=
     del client_manifest[platform]['version']
     packages = {}
     for package_name, package in client_manifest[platform].items():
+        if not isinstance(package, dict):
+            continue
         packages[package_name] = package
         for key, value in package.items():
             if type(value) == dict and value["file"]:
@@ -120,7 +122,7 @@ if __name__ == "__main__":
         parser.print_help()
         exit(1)
     elif args.local:
-        pattern = compile("_\d+$")
+        pattern = compile(r"_\d+$")
         if exists(args.clientname):
             platform = pattern.sub("", basename(args.clientname)).split("_")
             platform = platform[len(platform) - 1]
